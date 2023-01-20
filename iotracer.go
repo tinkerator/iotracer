@@ -140,7 +140,7 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 	t.vcdSection(w, "scope", "module ports", true)
 
 	var sigs []signal
-	for i, bit := 0, uint64(1); bit != 0 && bit < fullMask; i, bit = i+1, bit<<1 {
+	for i, bit := 0, uint64(1); bit != 0 && bit < fullMask; bit = bit << 1 {
 		if fullMask&bit != 0 {
 			sig := signal{
 				mask: bit,
@@ -148,11 +148,12 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 			}
 			sigs = append(sigs, sig)
 			t.vcdSection(w, "var", fmt.Sprintf("wire 1 %s sig%d", sig.ch, i), true)
+			i++
 		}
 	}
 
 	fmt.Fprint(w, "$upscope $end\n")
-	fmt.Fprint(w, "$enddefinitons $end\n")
+	fmt.Fprint(w, "$enddefinitions $end\n")
 	fmt.Fprint(w, "#0\n")
 	fmt.Fprint(w, "$dumpvars\n")
 
