@@ -13,6 +13,10 @@ facility. It also supports dumping the content of the trace buffer in
 VCD [Value Change
 Dump](https://en.wikipedia.org/wiki/Value_change_dump) format.
 
+Automated package documentation for this Go package should be
+available from [![Go
+Reference](https://pkg.go.dev/badge/zappem.net/pub/io/iotracer.svg)](https://pkg.go.dev/zappem.net/pub/io/iotracer).
+
 ## Getting started
 
 You can build an example and run it as follows:
@@ -31,9 +35,9 @@ as follows:
 
 ## TODOs
 
-- more sophisticated output labeling perhaps even grouping of labels
-  where it makes sense to capture numerical values that are longer
-  than a single bit.
+- Some more sophisticated output labeling perhaps by grouping of
+  labels where it makes sense to capture numerical values that are
+  longer than a single bit.
 
 ## License info
 
