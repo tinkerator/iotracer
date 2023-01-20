@@ -22,8 +22,12 @@ $ ./sample > dump.vcd
 ```
 
 You can see how this trace looks using
-[twave](https://github.com/tinkerator/twave), or a more friendly
-experience with [GTKWave](https://gtkwave.sourceforge.net/).
+[twave](https://github.com/tinkerator/twave), or as a more friendly
+experience with [GTKWave](https://gtkwave.sourceforge.net/). For the
+latter, `gtkwave dump.vcd` and selecting all of the signals displays
+as follows:
+
+![GTKWave rendering of this `dump.vcd` file.](screenshot.png)
 
 ## TODOs
 
