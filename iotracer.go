@@ -41,6 +41,11 @@ type Trace struct {
 
 	// fullMask holds the union of all mask values so far.
 	fullMask uint64
+
+	// labels capture the preferred labels for each numbered
+	// signal. The default labels are sig<n> where n is the [0,63)
+	// index of the traced bit value.
+	labels map[int]string
 }
 
 // NewTrace allocates a new tracer, capable of storing up to samples
@@ -56,7 +61,26 @@ func NewTrace(app string, samples uint) *Trace {
 		app:        app,
 		samples:    make([]Sample, samples),
 		maxSamples: samples,
+		labels:     make(map[int]string),
 	}
+}
+
+// ErrInvalidSignalIndex is returned if an attempt is made to
+// reference an impossible signal bit.
+var ErrInvalidSignalIndex = errors.New("invalid signal index, want [0,64)")
+
+// Label names a specific signal offset with a text label. If
+// label="", the label reverts to its default value: "sig#".
+func (t *Trace) Label(sig int, label string) error {
+	if t == nil || sig < 0 || sig >= 64 {
+		return ErrInvalidSignalIndex
+	}
+	if label == "" {
+		delete(t.labels, sig)
+	} else {
+		t.labels[sig] = label
+	}
+	return nil
 }
 
 // SampleAt appends a new snapshot to the trace at the specified time
@@ -101,6 +125,7 @@ var ErrNoTraceData = errors.New("no trace data")
 type signal struct {
 	mask uint64
 	ch   string
+	lab  string
 }
 
 // VCD generates a Value Change Dump from the trace recorded so far.
@@ -128,6 +153,22 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 	} else {
 		copy(working[:samples], t.samples[:samples])
 	}
+	var sigs []signal
+	for i, j, bit := 0, 0, uint64(1); bit != 0 && bit < fullMask; i, bit = i+1, bit<<1 {
+		if fullMask&bit != 0 {
+			lab := t.labels[i]
+			if lab == "" {
+				lab = fmt.Sprintf("sig%d", i)
+			}
+			sig := signal{
+				mask: bit,
+				ch:   fmt.Sprintf("%c", 33+j),
+				lab:  lab,
+			}
+			j++
+			sigs = append(sigs, sig)
+		}
+	}
 	t.mu.Unlock()
 
 	w := &bytes.Buffer{}
@@ -139,17 +180,8 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 	t.vcdSection(w, "timescale", fmt.Sprintf("%v", tScale), false)
 	t.vcdSection(w, "scope", "module ports", true)
 
-	var sigs []signal
-	for i, bit := 0, uint64(1); bit != 0 && bit < fullMask; bit = bit << 1 {
-		if fullMask&bit != 0 {
-			sig := signal{
-				mask: bit,
-				ch:   fmt.Sprintf("%c", 33+i),
-			}
-			sigs = append(sigs, sig)
-			t.vcdSection(w, "var", fmt.Sprintf("wire 1 %s sig%d", sig.ch, i), true)
-			i++
-		}
+	for _, sig := range sigs {
+		t.vcdSection(w, "var", fmt.Sprintf("wire 1 %s %s", sig.ch, sig.lab), true)
 	}
 
 	fmt.Fprint(w, "$upscope $end\n")
