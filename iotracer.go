@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 )
@@ -210,6 +211,19 @@ type signal struct {
 	lab  string
 }
 
+// keyOf represents the number j in a unique VCD preferred format.
+func keyOf(j int) string {
+	var cs []string
+	const digit = 127 - 33
+	const base = 33
+	for loop := true; loop; loop = j != 0 {
+		c := j % digit
+		cs = append(cs, fmt.Sprintf("%c", base+c))
+		j /= digit
+	}
+	return strings.Join(cs, "")
+}
+
 // VCD generates a Value Change Dump from the trace recorded so far.
 // The function starts by making a snapshot of the current trace.
 func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
@@ -248,7 +262,7 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 			}
 			sig := signal{
 				mask: bit,
-				ch:   fmt.Sprintf("%c", 33+j),
+				ch:   keyOf(j),
 				lab:  lab,
 			}
 			j++
