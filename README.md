@@ -46,8 +46,8 @@ ports.sig3 @ 2023-01-20 21:55:37.174728915 = false
 ```
 
 The timestamps and `true` and `false` values are tracking trace events
-where sig3 changes. In addition to this, the above command generates a
-`dump.vcd` file.
+where `sig3` changes. In addition to this, the above command generates
+a `dump.vcd` file.
 
 You can see how this trace looks using
 [twave](https://github.com/tinkerator/twave), or as a more friendly
