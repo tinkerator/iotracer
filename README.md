@@ -59,6 +59,7 @@ as follows:
 
 ## TODOs
 
+- Support more than one bank of VCD dumping at a time.
 - Some more sophisticated output labeling perhaps by grouping of
   labels where it makes sense to capture numerical values that are
   longer than a single bit.

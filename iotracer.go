@@ -295,7 +295,7 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 		s := working[i]
 		delta := lastVal ^ s.Value
 		dMask := lastMask ^ s.Mask
-		if i == 0 || dMask|delta != 0 {
+		if anyDelta := dMask | delta; i == 0 || anyDelta != 0 {
 			// Something has changed, so we need to include it in the dump file.
 			stamp := int(s.When.Sub(from) / tScale)
 			if stamp != lastStamp {
@@ -304,11 +304,11 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 			}
 			for _, sig := range sigs {
 				if sig.mask&s.Mask == 0 {
-					if i == 0 || (sig.mask&dMask) != 0 {
+					if i == 0 || sig.mask&dMask != 0 {
 						fmt.Fprintf(w, "x%s\n", sig.ch)
 					}
 				} else {
-					if i == 0 || (sig.mask&delta) != 0 {
+					if i == 0 || sig.mask&anyDelta != 0 {
 						v := 0
 						if sig.mask&s.Value != 0 {
 							v = 1
