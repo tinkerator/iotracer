@@ -407,7 +407,8 @@ func ExportVCD(dumper string, tScale time.Duration, traces ...*Trace) (<-chan st
 	go func() {
 		defer close(ch)
 
-		vcdSection(ch, "date", earliest.Format(time.ANSIC), false)
+		const layout = "2006-01-02 15:04:05.999999999 07:00"
+		vcdSection(ch, "date", fmt.Sprintf("%v", earliest.Format(layout)), false)
 		vcdSection(ch, "version", dumper, false)
 		vcdSection(ch, "timescale", fmt.Sprintf("%v", tScale), false)
 
