@@ -7,12 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"sync"
 	"time"
 )
 
-// datum holds a single trace entry.
+// Sample holds a single trace entry.
 type Sample struct {
 	// When holds the time the sample was logged.
 	When time.Time
@@ -20,6 +21,8 @@ type Sample struct {
 	Mask, Value uint64
 }
 
+// Event indicates when a signal value changed and what its new value
+// was at that time.
 type Event struct {
 	// When the event was generated.
 	When time.Time
@@ -29,7 +32,7 @@ type Event struct {
 
 // Trace holds a tracer.
 type Trace struct {
-	// app names the application that is making the trace.
+	// app names the subsystem that is making the trace.
 	app string
 
 	// module names the signal root. If this is empty, it
@@ -47,7 +50,7 @@ type Trace struct {
 	maxSamples uint
 
 	// cursor is a monotonically incremented counter indicating
-	// where (% .maxSamples) the next datum will be stored in
+	// where (% .maxSamples) the next Sample will be stored in
 	// .array.
 	cursor uint
 
@@ -193,11 +196,13 @@ func (t *Trace) Sample(mask, value uint64) {
 }
 
 // Output a section named such containing content with an end.
-func (t *Trace) vcdSection(w io.Writer, section, content string, oneLine bool) {
+func vcdSection(ch chan<- string, section, content string, oneLine bool) {
 	if oneLine {
-		fmt.Fprintf(w, "$%s %s $end\n", section, content)
+		ch <- fmt.Sprintf("$%s %s $end", section, content)
 	} else {
-		fmt.Fprintf(w, "$%s\n\t%s\n$end\n", section, content)
+		ch <- fmt.Sprint("$", section)
+		ch <- fmt.Sprint("\t", content)
+		ch <- "$end"
 	}
 }
 
@@ -224,38 +229,52 @@ func keyOf(j int) string {
 	return strings.Join(cs, "")
 }
 
-// VCD generates a Value Change Dump from the trace recorded so far.
-// The function starts by making a snapshot of the current trace.
-func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
-	if t == nil {
-		return nil, ErrNoTraceData
-	}
+// VCDDetail holds everything needed to produce a VCD dump for a
+// single trace.
+type VCDDetail struct {
+	app      string
+	module   string
+	fullMask uint64
+	samples  uint
+	working  []Sample
+	start    uint
+	sigs     []signal
+}
 
+// cacheVCDDetail snapshots a Trace for the purpose of generating a
+// VCD trace from it. The provided index is the next available VCD
+// signal index value and the returned int is the next available one.
+func (t *Trace) cacheVCDDetail(index int) (*VCDDetail, int) {
 	// Lock to make a thread safe copy of the data.
 	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	module := "ports"
 	if t.module != "" {
 		module = t.module
 	}
-	fullMask := t.fullMask
-	app := t.app
 	samples := t.cursor
 	cursor := t.cursor
 	if cursor > t.maxSamples {
 		samples = t.maxSamples
 	}
-	working := make([]Sample, samples)
-	start := (cursor + t.maxSamples - samples) % t.maxSamples
-
-	if samples != cursor {
-		copy(working[:samples-start], t.samples[start:])
-		copy(working[samples-start:], t.samples[:start])
-	} else {
-		copy(working[:samples], t.samples[:samples])
+	v := &VCDDetail{
+		module:   module,
+		fullMask: t.fullMask,
+		app:      t.app,
+		samples:  samples,
+		working:  make([]Sample, samples),
+		start:    (cursor + t.maxSamples - samples) % t.maxSamples,
 	}
-	var sigs []signal
-	for i, j, bit := 0, 0, uint64(1); bit != 0 && bit < fullMask; i, bit = i+1, bit<<1 {
-		if fullMask&bit != 0 {
+	if samples != cursor {
+		copy(v.working[:samples-v.start], t.samples[v.start:])
+		copy(v.working[samples-v.start:], t.samples[:v.start])
+	} else {
+		copy(v.working[:samples], t.samples[:samples])
+	}
+	j := index
+	for i, bit := 0, uint64(1); bit != 0 && bit < v.fullMask; i, bit = i+1, bit<<1 {
+		if v.fullMask&bit != 0 {
 			lab := t.labels[i]
 			if lab == "" {
 				lab = fmt.Sprintf("sig%d", i)
@@ -266,60 +285,176 @@ func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
 				lab:  lab,
 			}
 			j++
-			sigs = append(sigs, sig)
+			v.sigs = append(v.sigs, sig)
 		}
 	}
-	t.mu.Unlock()
+	return v, j
+}
 
-	w := &bytes.Buffer{}
+// Datum is used to manage the construction of a VCD signal trace dump.
+type Datum struct {
+	stamp uint
+	line  string
+}
 
-	from := working[0].When
-
-	t.vcdSection(w, "date", from.Format(time.ANSIC), false)
-	t.vcdSection(w, "version", app, false)
-	t.vcdSection(w, "timescale", fmt.Sprintf("%v", tScale), false)
-	t.vcdSection(w, "scope", fmt.Sprintf("module %s", module), true)
-
-	for _, sig := range sigs {
-		t.vcdSection(w, "var", fmt.Sprintf("wire 1 %s %s", sig.ch, sig.lab), true)
-	}
-
-	fmt.Fprint(w, "$upscope $end\n")
-	fmt.Fprint(w, "$enddefinitions $end\n")
-	fmt.Fprint(w, "#0\n")
-	fmt.Fprint(w, "$dumpvars\n")
-
-	var lastVal, lastMask uint64
-	var lastStamp = 0
-	for i := uint(0); i < samples; i++ {
-		s := working[i]
-		delta := lastVal ^ s.Value
-		dMask := lastMask ^ s.Mask
-		if anyDelta := dMask | delta; i == 0 || anyDelta != 0 {
-			// Something has changed, so we need to include it in the dump file.
-			stamp := int(s.When.Sub(from) / tScale)
-			if stamp != lastStamp {
-				fmt.Fprintf(w, "#%d\n", stamp)
-				lastStamp = stamp
-			}
-			for _, sig := range sigs {
-				if sig.mask&s.Mask == 0 {
-					if i == 0 || sig.mask&dMask != 0 {
-						fmt.Fprintf(w, "x%s\n", sig.ch)
-					}
-				} else {
-					if i == 0 || sig.mask&anyDelta != 0 {
-						v := 0
-						if sig.mask&s.Value != 0 {
-							v = 1
+func mergeVCD(earliest time.Time, tScale time.Duration, details []*VCDDetail) <-chan Datum {
+	ch := make(chan Datum)
+	go func() {
+		defer close(ch)
+		k := len(details)
+		switch k {
+		case 0:
+			return
+		case 1:
+			var lastVal, lastMask uint64
+			v := details[0]
+			for i := uint(0); i < v.samples; i++ {
+				s := v.working[i]
+				delta := lastVal ^ s.Value
+				dMask := lastMask ^ s.Mask
+				if anyDelta := dMask | delta; i == 0 || anyDelta != 0 {
+					// Something has changed, so we need to include it in the dump file.
+					stamp := uint(s.When.Sub(earliest) / tScale)
+					for _, sig := range v.sigs {
+						if sig.mask&s.Mask == 0 {
+							if i == 0 || sig.mask&dMask != 0 {
+								ch <- Datum{
+									stamp: stamp,
+									line:  fmt.Sprint("x", sig.ch),
+								}
+							}
+						} else {
+							if i == 0 || sig.mask&anyDelta != 0 {
+								v := 0
+								if sig.mask&s.Value != 0 {
+									v = 1
+								}
+								ch <- Datum{
+									stamp: stamp,
+									line:  fmt.Sprintf("%d%s", v, sig.ch),
+								}
+							}
 						}
-						fmt.Fprintf(w, "%d%s\n", v, sig.ch)
 					}
+				}
+				lastVal = s.Value
+				lastMask = s.Mask
+			}
+		default:
+			j := (k + 1) / 2
+			a := mergeVCD(earliest, tScale, details[:j])
+			b := mergeVCD(earliest, tScale, details[j:])
+			var lastA, lastB Datum
+			var okA, okB bool
+			for a != nil || b != nil {
+				if a != nil && !okA {
+					lastA, okA = <-a
+					if !okA {
+						a = nil
+					}
+				}
+				if b != nil && !okB {
+					lastB, okB = <-b
+					if !okB {
+						b = nil
+					}
+				}
+				if okA && okB {
+					if lastA.stamp <= lastB.stamp {
+						ch <- lastA
+						okA = false
+					} else {
+						ch <- lastB
+						okB = false
+					}
+				} else if okA {
+					ch <- lastA
+					okA = false
+				} else if okB {
+					ch <- lastB
+					okB = false
 				}
 			}
 		}
-		lastVal = s.Value
-		lastMask = s.Mask
+	}()
+	return ch
+}
+
+// ExportVCD generates a single VCD dump file from a set of concurrent
+// trace recordings. The argument dumper names the collection of
+// traces and tScale indicates what a count of 1 means in the counter
+// output.
+func ExportVCD(dumper string, tScale time.Duration, traces ...*Trace) (<-chan string, error) {
+	var details []*VCDDetail
+	j := 0
+	var earliest time.Time
+	for i, t := range traces {
+		v, k := t.cacheVCDDetail(j)
+		if k == j {
+			log.Printf("skipping trace %d: no signals recorded", i)
+			continue
+		}
+		details = append(details, v)
+		if then := v.working[0].When; j == 0 || then.Before(earliest) {
+			earliest = then
+		}
+		j = k
+	}
+	if j == 0 {
+		return nil, ErrNoTraceData
+	}
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+
+		vcdSection(ch, "date", earliest.Format(time.ANSIC), false)
+		vcdSection(ch, "version", dumper, false)
+		vcdSection(ch, "timescale", fmt.Sprintf("%v", tScale), false)
+
+		for _, v := range details {
+			vcdSection(ch, "scope", fmt.Sprintf("module %s", v.app), true)
+			vcdSection(ch, "scope", fmt.Sprintf("module %s", v.module), true)
+			for _, sig := range v.sigs {
+				vcdSection(ch, "var", fmt.Sprintf("wire 1 %s %s", sig.ch, sig.lab), true)
+			}
+			ch <- "$upscope $end"
+			ch <- "$upscope $end"
+		}
+
+		ch <- "$enddefinitions $end"
+
+		var stamp uint
+		started := false
+		for datum := range mergeVCD(earliest, tScale, details) {
+			if !started || datum.stamp != stamp {
+				stamp = datum.stamp
+				ch <- fmt.Sprint("#", stamp)
+				if !started {
+					ch <- "$dumpvars"
+					started = true
+				}
+			}
+			ch <- datum.line
+		}
+	}()
+	return ch, nil
+}
+
+// VCD generates a Value Change Dump from the trace recorded so far.
+// The function starts by making a snapshot of the current trace.
+func (t *Trace) VCD(tScale time.Duration) (io.Reader, error) {
+	if t == nil {
+		return nil, ErrNoTraceData
+	}
+
+	ch, err := ExportVCD("iotracer", tScale, t)
+	if err != nil {
+		return nil, err
+	}
+
+	w := &bytes.Buffer{}
+	for line := range ch {
+		fmt.Fprintln(w, line)
 	}
 
 	return w, nil

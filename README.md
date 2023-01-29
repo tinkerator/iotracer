@@ -10,8 +10,8 @@ trace them as they change.
 
 This package provides a circular buffer implementation of a tracing
 facility. It also supports dumping the content of the trace buffer in
-VCD [Value Change
-Dump](https://en.wikipedia.org/wiki/Value_change_dump) format.
+[Value Change Dump](https://en.wikipedia.org/wiki/Value_change_dump)
+(VCD) format.
 
 Automated package documentation for this Go package should be
 available from [![Go
@@ -23,37 +23,77 @@ You can build an example and run it as follows:
 ```
 $ go build examples/sample.go
 $ ./sample > dump.vcd
-ports.sig3 @ 2023-01-20 21:55:37.174626915 = true
-ports.sig3 @ 2023-01-20 21:55:37.174636915 = false
-ports.sig3 @ 2023-01-20 21:55:37.174653315 = true
-ports.sig3 @ 2023-01-20 21:55:37.174676115 = false
-ports.sig3 @ 2023-01-20 21:55:37.174680615 = true
-ports.sig3 @ 2023-01-20 21:55:37.174681615 = false
-ports.sig3 @ 2023-01-20 21:55:37.174682715 = true
-ports.sig3 @ 2023-01-20 21:55:37.174683915 = false
-ports.sig3 @ 2023-01-20 21:55:37.174685215 = true
-ports.sig3 @ 2023-01-20 21:55:37.174686615 = false
-ports.sig3 @ 2023-01-20 21:55:37.174688115 = true
-ports.sig3 @ 2023-01-20 21:55:37.174689715 = false
-ports.sig3 @ 2023-01-20 21:55:37.174708615 = true
-ports.sig3 @ 2023-01-20 21:55:37.174711215 = false
-ports.sig3 @ 2023-01-20 21:55:37.174713915 = true
-ports.sig3 @ 2023-01-20 21:55:37.174716715 = false
-ports.sig3 @ 2023-01-20 21:55:37.174719615 = true
-ports.sig3 @ 2023-01-20 21:55:37.174722615 = false
-ports.sig3 @ 2023-01-20 21:55:37.174725715 = true
-ports.sig3 @ 2023-01-20 21:55:37.174728915 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711618752 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711628752 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711645152 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711667952 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711672452 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711673452 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711674552 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711675752 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711677052 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711678452 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711679952 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711681552 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711700452 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711703052 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711705752 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711708552 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711711452 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711714452 = false
+sample.ports.sig3 @ 2023-01-28 18:48:19.711717552 = true
+sample.ports.sig3 @ 2023-01-28 18:48:19.711720752 = false
 ```
 
 The timestamps and `true` and `false` values are tracking trace events
-where `sig3` changes. In addition to this, the above command generates
-a `dump.vcd` file.
+where `sample.ports.sig3` changes. In addition to this, the above
+command generates a `dump.vcd` file.
+
+NOTE: the dates in the above output refer to the actual timestamps at
+the time `./sample` was running. However, the VCD dump does not
+contain enough precision for the initial timestamp to reproduce these
+timestamps exactly. Only the relative timestamp markers between signal
+transitions are preserved. Specifically:
+```
+$ twave --file dump.vcd | head -25
+[] : [$version top $end]
+               sample.ports.sig0-+
+               sample.ports.sig1-|-+
+               sample.ports.sig2-|-|-+
+               sample.ports.sig3-|-|-|-+
+               sample.ports.sig4-|-|-|-|-+
+               sample.ports.sig5-|-|-|-|-|-+
+                other.ports.sig0-|-|-|-|-|-|-+
+                other.ports.sig1-|-|-|-|-|-|-|-+
+                other.ports.sig2-|-|-|-|-|-|-|-|-+
+                other.ports.sig3-|-|-|-|-|-|-|-|-|-+
+                other.ports.sig4-|-|-|-|-|-|-|-|-|-|-+
+                other.ports.sig5-|-|-|-|-|-|-|-|-|-|-|-+
+                                 | | | | | | | | | | | |
+2023-01-28 18:48:19.000000000000 x x x x x x      
+2023-01-28 18:48:19.000000100000 1 x x x x x      
+2023-01-28 18:48:19.000000300000 0 1 x x x x      
+2023-01-28 18:48:19.000000600000 1 1 x x x x      
+2023-01-28 18:48:19.000001000000 0 0 1 x x x      
+2023-01-28 18:48:19.000001500000 1 0 1 x x x      
+2023-01-28 18:48:19.000002100000 0 1 1 x x x      
+2023-01-28 18:48:19.000002800000 1 1 1 x x x      
+2023-01-28 18:48:19.000003600000 0 0 0 1 x x      
+2023-01-28 18:48:19.000004500000 1 0 0 1 x x      
+2023-01-28 18:48:19.000005500000 0 1 0 1 x x      
+```
+See, that in the `dump.vcd` file (displayed with
+[`twave`](https://github.com/tinkerator/twave)) the
+`sample.ports.sig3` signal transitions at
+`2023-01-28 18:48:19.000003600000` but in the original `./sample` run,
+it is recorded at `2023-01-28 18:48:19.711618752`. This is not a bug,
+but an artifact of the VCD file format.
 
 You can see how this trace looks using
-[twave](https://github.com/tinkerator/twave), or as a more friendly
-experience with [GTKWave](https://gtkwave.sourceforge.net/). For the
-latter, `gtkwave dump.vcd` and selecting all of the signals displays
-as follows:
+[twave](https://github.com/tinkerator/twave), as shown above, or with
+a more graphical experience with
+[GTKWave](https://gtkwave.sourceforge.net/). For the latter, `gtkwave
+dump.vcd` and selecting all of the signals displays as follows:
 
 ![GTKWave rendering of this `dump.vcd` file.](screenshot.png)
 

@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"sync"
@@ -16,6 +15,7 @@ const layout = ""
 
 func main() {
 	tr := iotracer.NewTrace("sample", 100)
+	tr2 := iotracer.NewTrace("other", 30)
 	ch, err := tr.Watch(3, 100)
 	if err != nil {
 		log.Fatalf("unable to watch signal 3: %v", err)
@@ -25,7 +25,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 		for ev := range ch {
-			fmt.Fprintf(os.Stderr, "ports.sig3 @ %s = %v\n", ev.When.Format("2006-01-02 15:04:05.000000000"), ev.On)
+			fmt.Fprintf(os.Stderr, "sample.ports.sig3 @ %s = %v\n", ev.When.Format("2006-01-02 15:04:05.000000000"), ev.On)
 		}
 	}()
 
@@ -36,6 +36,7 @@ func main() {
 		mask |= i
 		t = t.Add(time.Duration(i) * 100 * time.Nanosecond)
 		tr.SampleAt(t, mask, i)
+		tr2.SampleAt(t.Add(10000), mask, i)
 	}
 	for i := uint64(0); i < 33; i++ {
 		mask ^= i
@@ -45,9 +46,11 @@ func main() {
 	tr.Cancel(ch)
 	wg.Wait()
 
-	b, err := tr.VCD(100 * time.Nanosecond)
+	b, err := iotracer.ExportVCD("top", 100*time.Nanosecond, tr, tr2)
 	if err != nil {
 		log.Fatalf("failed to dump trace: %v", err)
 	}
-	io.Copy(os.Stdout, b)
+	for line := range b {
+		fmt.Println(line)
+	}
 }
