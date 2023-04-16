@@ -30,6 +30,15 @@ type Event struct {
 	On bool
 }
 
+// labelRange holds an alias for a range of signals.
+type labelRange struct {
+	// left and right hold the signal index range to be displayed.
+	left, right, bits int
+
+	// label holds the text label of this range of bits.
+	label string
+}
+
 // Trace holds a tracer.
 type Trace struct {
 	// app names the subsystem that is making the trace.
@@ -60,7 +69,7 @@ type Trace struct {
 	// labels capture the preferred labels for each numbered
 	// signal. The default labels are sig<n> where n is the [0,63)
 	// index of the traced bit value.
-	labels map[int]string
+	labels map[int]*labelRange
 
 	// changes hold channels to write to when tracked IO values
 	// change.
@@ -80,7 +89,7 @@ func NewTrace(app string, samples uint) *Trace {
 		app:        app,
 		samples:    make([]Sample, samples),
 		maxSamples: samples,
-		labels:     make(map[int]string),
+		labels:     make(map[int]*labelRange),
 		changes:    make(map[uint64][]chan Event),
 	}
 }
@@ -99,18 +108,43 @@ func (t *Trace) Module(name string) {
 // reference an impossible signal bit.
 var ErrInvalidSignalIndex = errors.New("invalid signal index, want [0,64)")
 
+// Alias names a range of indices. It will silently delete any
+// overlapping labeled ranges.
+func (t *Trace) Alias(base, left, right int, label string) error {
+	bits := left - right
+	if bits < 0 {
+		bits = 1 - bits
+	} else {
+		bits++
+	}
+	if t == nil || base < 0 || base >= 64 || base+bits > 64 {
+		return ErrInvalidSignalIndex
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for i, a := range t.labels {
+		if iBase := int(base); i+a.bits <= iBase || i-bits >= iBase {
+			continue
+		}
+		// This a overlaps with the alias we're trying to add
+		// so we delete it.
+		delete(t.labels, i)
+	}
+	if label != "" {
+		t.labels[base] = &labelRange{
+			left:  left,
+			right: right,
+			bits:  bits,
+			label: label,
+		}
+	}
+	return nil
+}
+
 // Label names a specific signal offset with a text label. If
 // label="", the label reverts to its default value: "sig#".
 func (t *Trace) Label(sig int, label string) error {
-	if t == nil || sig < 0 || sig >= 64 {
-		return ErrInvalidSignalIndex
-	}
-	if label == "" {
-		delete(t.labels, sig)
-	} else {
-		t.labels[sig] = label
-	}
-	return nil
+	return t.Alias(sig, 0, 0, label)
 }
 
 // Watch opens an Event channel to watch for changes in value of a
@@ -211,9 +245,10 @@ var ErrNoTraceData = errors.New("no trace data")
 
 // signal is used for VCD signal identification.
 type signal struct {
-	mask uint64
-	ch   string
-	lab  string
+	bits, left, right, shift int
+	mask                     uint64
+	ch                       string
+	lab                      string
 }
 
 // keyOf represents the number j in a unique VCD preferred format.
@@ -273,20 +308,32 @@ func (t *Trace) cacheVCDDetail(index int) (*VCDDetail, int) {
 		copy(v.working[:samples], t.samples[:samples])
 	}
 	j := index
-	for i, bit := 0, uint64(1); bit != 0 && bit < v.fullMask; i, bit = i+1, bit<<1 {
-		if v.fullMask&bit != 0 {
-			lab := t.labels[i]
-			if lab == "" {
-				lab = fmt.Sprintf("sig%d", i)
-			}
+	for i := 0; i < 64; {
+		var lab string
+		n, left, right := 1, 0, 0
+		if r := t.labels[i]; r == nil {
+			lab = fmt.Sprintf("sig%d", i)
+		} else {
+			lab = r.label
+			n = r.bits
+			left = r.left
+			right = r.right
+		}
+		mask := ((^uint64(0)) >> (64 - n)) << i
+		if v.fullMask&mask != 0 {
 			sig := signal{
-				mask: bit,
-				ch:   keyOf(j),
-				lab:  lab,
+				bits:  n,
+				left:  left,
+				right: right,
+				shift: i,
+				mask:  mask,
+				ch:    keyOf(j),
+				lab:   lab,
 			}
 			j++
 			v.sigs = append(v.sigs, sig)
 		}
+		i += n
 	}
 	return v, j
 }
@@ -316,22 +363,30 @@ func mergeVCD(earliest time.Time, tScale time.Duration, details []*VCDDetail) <-
 					// Something has changed, so we need to include it in the dump file.
 					stamp := uint(s.When.Sub(earliest) / tScale)
 					for _, sig := range v.sigs {
+						var line string
 						if sig.mask&s.Mask == 0 {
+							if sig.bits == 1 {
+								line = fmt.Sprint("x", sig.ch)
+							} else {
+								line = fmt.Sprint("bx ", sig.ch)
+							}
 							if i == 0 || sig.mask&dMask != 0 {
 								ch <- Datum{
 									stamp: stamp,
-									line:  fmt.Sprint("x", sig.ch),
+									line:  line,
 								}
 							}
 						} else {
 							if i == 0 || sig.mask&anyDelta != 0 {
-								v := 0
-								if sig.mask&s.Value != 0 {
-									v = 1
+								v := (sig.mask & s.Value) >> sig.shift
+								if sig.bits == 1 {
+									line = fmt.Sprintf("%b%s", v, sig.ch)
+								} else {
+									line = fmt.Sprintf("b%b %s", v, sig.ch)
 								}
 								ch <- Datum{
 									stamp: stamp,
-									line:  fmt.Sprintf("%d%s", v, sig.ch),
+									line:  line,
 								}
 							}
 						}
@@ -416,7 +471,11 @@ func ExportVCD(dumper string, tScale time.Duration, traces ...*Trace) (<-chan st
 			vcdSection(ch, "scope", fmt.Sprintf("module %s", v.app), true)
 			vcdSection(ch, "scope", fmt.Sprintf("module %s", v.module), true)
 			for _, sig := range v.sigs {
-				vcdSection(ch, "var", fmt.Sprintf("wire 1 %s %s", sig.ch, sig.lab), true)
+				if sig.bits == 1 {
+					vcdSection(ch, "var", fmt.Sprintf("wire 1 %s %s", sig.ch, sig.lab), true)
+				} else {
+					vcdSection(ch, "var", fmt.Sprintf("wire %d %s %s [%d:%d]", sig.bits, sig.ch, sig.lab, sig.left, sig.right), true)
+				}
 			}
 			ch <- "$upscope $end"
 			ch <- "$upscope $end"
