@@ -23,26 +23,26 @@ You can build an example and run it as follows:
 ```
 $ go build examples/sample.go
 $ ./sample > dump.vcd
-sample.ports.sig3 @ 2023-01-29 13:39:00.832526747 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832536747 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832553147 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832575947 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832580447 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832581447 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832582547 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832583747 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832585047 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832586447 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832587947 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832589547 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832608447 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832611047 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832613747 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832616547 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832619447 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832622447 = false
-sample.ports.sig3 @ 2023-01-29 13:39:00.832625547 = true
-sample.ports.sig3 @ 2023-01-29 13:39:00.832628747 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261259046 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261269046 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261285446 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261308246 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261312746 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261313746 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261314846 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261316046 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261317346 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261318746 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261320246 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261321846 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261340746 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261343346 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261346046 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261348846 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261351746 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261354746 = false
+sample.ports.sig3 @ 2023-04-16 18:54:17.261357846 = true
+sample.ports.sig3 @ 2023-04-16 18:54:17.261361046 = false
 ```
 
 The timestamps and `true` and `false` values are tracking trace events
@@ -54,7 +54,7 @@ the time `./sample` was running. VCD dump contains enough precision to
 reconstruct these timestamps to the precision used to generate the VCD
 dump. Specifically:
 ```
-$ twave --file dump.vcd | head -25
+$ twave --file dump.vcd | head -30
 [] : [$version top $end]
                sample.ports.sig0-+
                sample.ports.sig1-|-+
@@ -63,29 +63,34 @@ $ twave --file dump.vcd | head -25
                sample.ports.sig4-|-|-|-|-+
                sample.ports.sig5-|-|-|-|-|-+
                 other.ports.sig0-|-|-|-|-|-|-+
-                other.ports.sig1-|-|-|-|-|-|-|-+
-                other.ports.sig2-|-|-|-|-|-|-|-|-+
-                other.ports.sig3-|-|-|-|-|-|-|-|-|-+
-                other.ports.sig4-|-|-|-|-|-|-|-|-|-|-+
-                other.ports.sig5-|-|-|-|-|-|-|-|-|-|-|-+
-                                 | | | | | | | | | | | |
-2023-01-29 13:39:00.832523147000 x x x x x x      
-2023-01-29 13:39:00.832523247000 1 x x x x x      
-2023-01-29 13:39:00.832523447000 0 1 x x x x      
-2023-01-29 13:39:00.832523747000 1 1 x x x x      
-2023-01-29 13:39:00.832524147000 0 0 1 x x x      
-2023-01-29 13:39:00.832524647000 1 0 1 x x x      
-2023-01-29 13:39:00.832525247000 0 1 1 x x x      
-2023-01-29 13:39:00.832525947000 1 1 1 x x x      
-2023-01-29 13:39:00.832526747000 0 0 0 1 x x      
-2023-01-29 13:39:00.832527647000 1 0 0 1 x x      
-2023-01-29 13:39:00.832528647000 0 1 0 1 x x
+           other.ports.octo[0:2]-|-|-|-|-|-|-|---+
+                other.ports.sig4-|-|-|-|-|-|-|---|-+
+                other.ports.sig5-|-|-|-|-|-|-|---|-|-+
+                                 | | | | | | |   | | |
+2023-04-16 18:54:17.261255446000 x x x x x x x xxx x x
+2023-04-16 18:54:17.261255546000 1 x x x x x x xxx x x
+2023-04-16 18:54:17.261255746000 0 1 x x x x x xxx x x
+2023-04-16 18:54:17.261256046000 1 1 x x x x x xxx x x
+2023-04-16 18:54:17.261256446000 0 0 1 x x x x xxx x x
+2023-04-16 18:54:17.261256946000 1 0 1 x x x x xxx x x
+2023-04-16 18:54:17.261257546000 0 1 1 x x x x xxx x x
+2023-04-16 18:54:17.261258246000 1 1 1 x x x x xxx x x
+2023-04-16 18:54:17.261259046000 0 0 0 1 x x x xxx x x
+2023-04-16 18:54:17.261259946000 1 0 0 1 x x x xxx x x
+2023-04-16 18:54:17.261260946000 0 1 0 1 x x x xxx x x
+2023-04-16 18:54:17.261262046000 1 1 0 1 x x x xxx x x
+2023-04-16 18:54:17.261263246000 0 0 1 1 x x x xxx x x
+2023-04-16 18:54:17.261264546000 1 0 1 1 x x x xxx x x
+2023-04-16 18:54:17.261265946000 0 1 1 1 x x x xxx x x
+2023-04-16 18:54:17.261266046000 0 1 1 1 x x 1 001 x x
+2023-04-16 18:54:17.261266446000 0 1 1 1 x x 0 010 x x
+2023-04-16 18:54:17.261266946000 0 1 1 1 x x 1 010 x x
 ```
 See, that in the `dump.vcd` file (displayed with
 [`twave`](https://github.com/tinkerator/twave)) the
 `sample.ports.sig3` signal transitions at
-`2023-01-29 13:39:00.832526747000` and in the original `./sample` run,
-it is recorded at `2023-01-29 13:39:00.832526747`.
+`2023-04-16 18:54:17.261259046000` and in the original `./sample` run,
+it is recorded at `2023-04-16 18:54:17.261259046`.
 
 You can see how this trace looks using
 [twave](https://github.com/tinkerator/twave), as shown above, or with

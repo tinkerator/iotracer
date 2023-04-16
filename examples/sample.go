@@ -46,6 +46,11 @@ func main() {
 	tr.Cancel(ch)
 	wg.Wait()
 
+	// merge together 3 bits.
+	if err := tr2.Alias(1, 0, 2, "octo"); err != nil {
+		log.Fatalf("unable to alias 3 bits of tr2: %v", err)
+	}
+
 	b, err := iotracer.ExportVCD("top", 100*time.Nanosecond, tr, tr2)
 	if err != nil {
 		log.Fatalf("failed to dump trace: %v", err)
