@@ -100,12 +100,6 @@ dump.vcd` and selecting all of the signals displays as follows:
 
 ![GTKWave rendering of this `dump.vcd` file.](screenshot.png)
 
-## TODOs
-
-- Some more sophisticated output labeling perhaps by grouping of
-  labels where it makes sense to capture numerical values that are
-  longer than a single bit.
-
 ## License info
 
 The `iotracer` package is distributed with the same BSD 3-clause license
